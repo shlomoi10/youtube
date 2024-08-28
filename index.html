@@ -70,6 +70,8 @@
             display: none;
         }
     </style>
+    <!-- הוספת יוטיוב iFrame API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
 </head>
 
 <body class="bg-gray-100 text-gray-800 transition-colors duration-500">
@@ -91,7 +93,7 @@
                     נגן פלייליסט
                 </button>
                 <div id="videoPlayerContainer" class="mt-4">
-                    <iframe id="videoPlayer" class="w-full h-56 rounded-lg shadow-lg" frameborder="0" allow="autoplay"></iframe>
+                    <div id="videoPlayer" class="w-full h-56 rounded-lg shadow-lg"></div>
                 </div>
                 <div class="flex justify-between items-center mt-4">
                     <button onclick="playPrevious()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">⏮️</button>
@@ -127,12 +129,19 @@
         let query = '';
         let playlist = [];
         let currentVideoIndex = 0;
-        let videoPlayer;
+        let player;
         let isPlaying = false;
         let userApiKey = '';
 
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('videoPlayer', {
+                events: {
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
-            // Check for existing API key in cookies
             const existingApiKey = getCookie('userApiKey');
             if (existingApiKey) {
                 userApiKey = existingApiKey;
@@ -184,8 +193,8 @@
             const resultsDiv = document.getElementById('results');
             data.items.forEach(item => {
                 const videoContainer = document.createElement('div');
-                videoContainer.className = 'flex flex-col items-center';
-
+                videoContainer.className = 'bg-white dark:bg-gray-700 p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300';
+                
                 const videoTitle = document.createElement('h2');
                 videoTitle.textContent = decodeHtmlEntities(item.snippet.title);
                 videoTitle.className = 'text-lg font-bold mt-2 text-center';
@@ -241,17 +250,16 @@
         }
 
         function loadVideo(videoId) {
-            videoPlayer = document.getElementById('videoPlayer');
-            videoPlayer.src = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+            player.loadVideoById(videoId);
             isPlaying = true;
         }
 
         function togglePlayPause() {
             if (!isPlaying) {
-                videoPlayer.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+                player.playVideo();
                 isPlaying = true;
             } else {
-                videoPlayer.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+                player.pauseVideo();
                 isPlaying = false;
             }
         }
@@ -310,6 +318,12 @@
                 }
             }
             return "";
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.ENDED) {
+                playNext();
+            }
         }
     </script>
 
