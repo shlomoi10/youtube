@@ -1,1 +1,328 @@
-תקין
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>חיפוש ביוטיוב ויצירת פלייליסט</title>
+		<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+		<style>
+			.dark-mode {
+				background-color: #1a202c;
+				color: #f7fafc;
+			}
+
+			.toggle-checkbox:checked + .toggle-label {
+				background-color: #4ade80;
+			}
+
+			.toggle-checkbox:checked + .toggle-label:before {
+				transform: translateX(24px);
+			}
+
+			.toggle-label {
+				display: inline-block;
+				width: 50px;
+				height: 24px;
+				background-color: #ddd;
+				border-radius: 9999px;
+				position: relative;
+				cursor: pointer;
+				transition: background-color 0.3s;
+			}
+
+			.toggle-label:before {
+				content: '';
+				position: absolute;
+				top: 2px;
+				left: 2px;
+				width: 20px;
+				height: 20px;
+				background-color: #fff;
+				border-radius: 9999px;
+				transition: transform 0.3s;
+			}
+
+			.dark-mode .bg-white {
+				background-color: #2d3748;
+			}
+
+			.dark-mode .text-gray-800 {
+				color: #f7fafc;
+			}
+
+			.dark-mode input {
+				background-color: #4a5568;
+				color: #f7fafc;
+			}
+
+			.dark-mode input::placeholder {
+				color: #a0aec0;
+			}
+
+			#playlistSidebar.collapsed {
+				width: 0;
+				overflow: hidden;
+			}
+
+			#videoPlayerContainer {
+				display: none;
+			}
+		</style>
+	</head>
+
+	<body class="bg-gray-100 text-gray-800 transition-colors duration-500">
+
+		<div class="flex flex-col md:flex-row min-h-screen">
+			<!-- Sidebar for playlist -->
+			<div id="playlistSidebar" class="w-full md:w-1/4 bg-white dark:bg-gray-800 dark:text-white p-4 transition-all duration-300">
+				<div class="flex justify-between items-center mb-4">
+					<h2 class="text-xl font-bold">פלייליסט שלי</h2>
+					<button onclick="togglePlaylist()" class="focus:outline-none">
+						☰
+					</button>
+				</div>
+				<ul id="playlist" class="space-y-2">
+					<!-- Playlist items will be added here -->
+				</ul>
+				<div class="mt-6">
+					<button onclick="playPlaylist()" class="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 mb-2">
+						נגן פלייליסט
+					</button>
+					<div id="videoPlayerContainer" class="mt-4">
+						<iframe id="videoPlayer" class="w-full h-56 rounded-lg shadow-lg" frameborder="0" allow="autoplay"></iframe>
+					</div>
+					<div class="flex justify-between items-center mt-4">
+						<button onclick="playPrevious()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">⏮️</button>
+						<button onclick="togglePlayPause()" class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">⏯️</button>
+						<button onclick="playNext()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">⏭️</button>
+						<input type="range" id="volumeControl" min="0" max="100" value="50" class="w-20 h-2 bg-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+					</div>
+				</div>
+			</div>
+
+			<!-- Main content -->
+			<div class="flex-1 p-8">
+				<div class="max-w-md mx-auto bg-white rounded-lg shadow-lg dark:bg-gray-800 dark:text-white p-6">
+					<h1 class="text-3xl font-bold mb-6 text-center">חיפוש ביוטיוב</h1>
+					<div class="flex mb-4">
+						<input type="text" id="searchQuery" class="w-full p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="הזן טקסט לחיפוש ביוטיוב">
+						<button onclick="searchYouTube()" class="bg-blue-500 text-white p-3 rounded-r-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">חפש</button>
+					</div>
+					<div class="flex items-center justify-center mb-4">
+						<label for="toggleDarkMode" class="mr-2">מצב כהה</label>
+						<input type="checkbox" id="toggleDarkMode" class="toggle-checkbox hidden">
+						<label for="toggleDarkMode" class="toggle-label" onclick="toggleDarkMode()"></label>
+					</div>
+				</div>
+
+				<div id="results" class="w-full max-w-4xl mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+				<button id="loadMore" onclick="loadMoreResults()" class="mt-6 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500" style="display:none;">הצג עוד תוצאות</button>
+			</div>
+		</div>
+
+		<script>
+			let nextPageToken = '';
+			let query = '';
+			let playlist = [];
+			let currentVideoIndex = 0;
+			let videoPlayer;
+			let isPlaying = false;
+
+			document.getElementById('searchQuery').addEventListener('keypress', function(e) {
+				if (e.key === 'Enter') {
+					searchYouTube();
+				}
+			});
+
+			function searchYouTube() {
+				query = document.getElementById('searchQuery').value;
+				nextPageToken = '';
+				document.getElementById('results').innerHTML = '';
+				document.getElementById('loadMore').style.display = 'none';
+				fetchResults();
+			}
+
+			function fetchResults() {
+				fetch('https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=20&q=' + encodeURIComponent(query) + '&type=video&key=AIzaSyCuBx18jUNhAMViOCqEYkcJmThCgFakzto&pageToken=' + nextPageToken)
+					.then(response => response.json())
+					.then(data => {
+						displayResults(data);
+						if (data.nextPageToken) {
+							nextPageToken = data.nextPageToken;
+							document.getElementById('loadMore').style.display = 'block';
+						} else {
+							document.getElementById('loadMore').style.display = 'none';
+						}
+					})
+					.catch(error => {
+						console.error('Error:', error);
+					});
+			}
+
+			function displayResults(data) {
+				const resultsDiv = document.getElementById('results');
+				data.items.forEach(item => {
+					const videoContainer = document.createElement('div');
+					videoContainer.className = 'flex flex-col items-center';
+
+					const videoTitle = document.createElement('h2');
+					videoTitle.textContent = decodeHtmlEntities(item.snippet.title);
+					videoTitle.className = 'text-lg font-semibold mb-2 dark:text-white';
+					videoContainer.appendChild(videoTitle);
+
+					const addToPlaylistButton = document.createElement('button');
+					addToPlaylistButton.textContent = 'הוסף לפלייליסט';
+					addToPlaylistButton.className = 'mb-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500';
+					addToPlaylistButton.onclick = () => addToPlaylist(item.id.videoId, item.snippet.title);
+					videoContainer.appendChild(addToPlaylistButton);
+
+					const videoFrame = document.createElement('iframe');
+					videoFrame.src = 'https://www.youtube.com/embed/' + item.id.videoId;
+					videoFrame.className = 'w-full h-56 rounded-lg shadow-lg';
+					videoContainer.appendChild(videoFrame);
+
+					resultsDiv.appendChild(videoContainer);
+				});
+			}
+
+			function loadMoreResults() {
+				fetchResults();
+			}
+
+			function toggleDarkMode() {
+				document.body.classList.toggle('dark-mode');
+				document.querySelectorAll('.bg-white').forEach(el => el.classList.toggle('bg-gray-800'));
+				document.querySelectorAll('.text-gray-800').forEach(el => el.classList.toggle('text-white'));
+				document.querySelectorAll('input').forEach(el => {
+					el.classList.toggle('bg-gray-800');
+					el.classList.toggle('text-white');
+				});
+			}
+
+			function addToPlaylist(videoId, title) {
+				playlist.push({
+					videoId,
+					title
+				});
+				updatePlaylist();
+			}
+
+			function updatePlaylist() {
+				const playlistDiv = document.getElementById('playlist');
+				playlistDiv.innerHTML = '';
+				playlist.forEach((item, index) => {
+					const listItem = document.createElement('li');
+					listItem.className = 'flex items-center justify-between bg-gray-200 dark:bg-gray-700 p-2 rounded-lg shadow-lg';
+					listItem.textContent = item.title;
+
+					const controlsDiv = document.createElement('div');
+
+					const upButton = document.createElement('button');
+					upButton.textContent = '⬆️';
+					upButton.className = 'mr-2 px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500';
+					upButton.onclick = () => moveItem(index, -1);
+					controlsDiv.appendChild(upButton);
+
+					const downButton = document.createElement('button');
+					downButton.textContent = '⬇️';
+					downButton.className = 'mr-2 px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500';
+					downButton.onclick = () => moveItem(index, 1);
+					controlsDiv.appendChild(downButton);
+
+					const deleteButton = document.createElement('button');
+					deleteButton.textContent = '🗑️';
+					deleteButton.className = 'px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500';
+					deleteButton.onclick = () => removeItem(index);
+					controlsDiv.appendChild(deleteButton);
+
+					listItem.appendChild(controlsDiv);
+					playlistDiv.appendChild(listItem);
+				});
+			}
+
+			function moveItem(index, direction) {
+				const newIndex = index + direction;
+				if (newIndex < 0 || newIndex >= playlist.length) return; // Check bounds
+				const temp = playlist[index];
+				playlist[index] = playlist[newIndex];
+				playlist[newIndex] = temp;
+				updatePlaylist();
+			}
+
+			function removeItem(index) {
+				playlist.splice(index, 1);
+				updatePlaylist();
+			}
+
+			function togglePlaylist() {
+				const sidebar = document.getElementById('playlistSidebar');
+				sidebar.classList.toggle('collapsed');
+			}
+
+			function playPlaylist() {
+				if (playlist.length === 0) return;
+				currentVideoIndex = 0;
+				playVideo(playlist[currentVideoIndex].videoId);
+			}
+
+			function playVideo(videoId) {
+				document.getElementById('videoPlayerContainer').style.display = 'block';
+				if (!videoPlayer) {
+					videoPlayer = document.getElementById('videoPlayer');
+				}
+				videoPlayer.src = 'https://www.youtube.com/embed/' + videoId + '?autoplay=1&enablejsapi=1';
+				videoPlayer.onload = () => {
+					setTimeout(checkAndPlayNext, 5000); // Check if video started playing
+				};
+			}
+
+			function checkAndPlayNext() {
+				if (currentVideoIndex >= playlist.length) return;
+				if (isPlaying) return;
+				currentVideoIndex++;
+				if (currentVideoIndex < playlist.length) {
+					playVideo(playlist[currentVideoIndex].videoId);
+				}
+			}
+
+			function playNext() {
+				if (currentVideoIndex < playlist.length - 1) {
+					currentVideoIndex++;
+					playVideo(playlist[currentVideoIndex].videoId);
+				}
+			}
+
+			function playPrevious() {
+				if (currentVideoIndex > 0) {
+					currentVideoIndex--;
+					playVideo(playlist[currentVideoIndex].videoId);
+				}
+			}
+
+			function togglePlayPause() {
+				if (isPlaying) {
+					videoPlayer.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+					isPlaying = false;
+				} else {
+					videoPlayer.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+					isPlaying = true;
+				}
+			}
+
+			document.getElementById('volumeControl').addEventListener('input', function() {
+				const volume = this.value / 100;
+				if (videoPlayer) {
+					videoPlayer.contentWindow.postMessage('{"event":"command","func":"setVolume","args":[' + (volume * 100) + ']}', '*');
+				}
+			});
+
+			function decodeHtmlEntities(str) {
+				return str.replace(/&#(\d+);/g, function(match, dec) {
+					return String.fromCharCode(dec);
+				});
+			}
+		</script>
+	</body>
+
+</html>
