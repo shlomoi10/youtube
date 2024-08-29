@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>חיפוש ביוטיוב ויצירת פלייליסט</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <style>
-        /* הקוד הקיים שלך */
         .dark-mode {
             background-color: #1a202c;
             color: #f7fafc;
@@ -69,8 +69,46 @@
         #videoPlayerContainer {
             display: none;
         }
+
+        .playlist-item {
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+        }
+
+        .playlist-item:hover {
+            background-color: #e2e8f0;
+        }
+
+        .playlist-item.dragging {
+            background-color: #e2e8f0;
+            transform: scale(1.05);
+        }
+
+        .icon-button {
+            color: #2d3748;
+            font-size: 1.5rem;
+            transition: color 0.3s;
+        }
+
+        .icon-button:hover {
+            color: #4a5568;
+        }
+
+        .drag-handle {
+            cursor: move;
+        }
+
+        .hidden {
+            display: none;
+        }
     </style>
-    <!-- הוספת יוטיוב iFrame API -->
     <script src="https://www.youtube.com/iframe_api"></script>
 </head>
 
@@ -96,9 +134,11 @@
                     <div id="videoPlayer" class="w-full h-56 rounded-lg shadow-lg"></div>
                 </div>
                 <div class="flex justify-between items-center mt-4">
-                    <button onclick="playPrevious()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">⏮️</button>
-                    <button onclick="togglePlayPause()" class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">⏯️</button>
-                    <button onclick="playNext()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">⏭️</button>
+                    <i class="fas fa-backward icon-button" onclick="playPrevious()"></i>
+                    <i class="fas fa-play icon-button" onclick="togglePlayPause()"></i>
+                    <i class="fas fa-forward icon-button" onclick="playNext()"></i>
+                    <i class="fas fa-random icon-button" onclick="toggleShuffle()"></i>
+                    <i class="fas fa-redo icon-button" onclick="toggleRepeat()"></i>
                     <input type="range" id="volumeControl" min="0" max="100" value="50" class="w-20 h-2 bg-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
             </div>
@@ -131,6 +171,8 @@
         let currentVideoIndex = 0;
         let player;
         let isPlaying = false;
+        let shuffle = false;
+        let repeat = false;
         let userApiKey = '';
 
         function onYouTubeIframeAPIReady() {
@@ -169,32 +211,26 @@
 
         function fetchResults() {
             if (!userApiKey) {
-                alert('מפתח ה-API לא נמצא, אנא רענן את הדף והזן את המפתח שוב.');
+                alert('מפתח ה-API לא נמצא, אנא טען מחדש את הדף.');
                 return;
             }
 
-            fetch('https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=20&q=' + encodeURIComponent(query) + '&type=video&key=' + userApiKey + '&pageToken=' + nextPageToken)
+            fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&key=${userApiKey}&pageToken=${nextPageToken}`)
                 .then(response => response.json())
                 .then(data => {
-                    displayResults(data);
-                    if (data.nextPageToken) {
-                        nextPageToken = data.nextPageToken;
-                        document.getElementById('loadMore').style.display = 'block';
-                    } else {
-                        document.getElementById('loadMore').style.display = 'none';
-                    }
+                    nextPageToken = data.nextPageToken || '';
+                    document.getElementById('loadMore').style.display = nextPageToken ? 'block' : 'none';
+                    displayResults(data.items);
                 })
-                .catch(error => {
-                    console.error('Error:', error);
-                });
+                .catch(error => console.error('Error fetching YouTube data:', error));
         }
 
-        function displayResults(data) {
+        function displayResults(items) {
             const resultsDiv = document.getElementById('results');
-            data.items.forEach(item => {
+            items.forEach(item => {
                 const videoContainer = document.createElement('div');
                 videoContainer.className = 'bg-white dark:bg-gray-700 p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300';
-                
+
                 const videoTitle = document.createElement('h2');
                 videoTitle.textContent = decodeHtmlEntities(item.snippet.title);
                 videoTitle.className = 'text-lg font-bold mt-2 text-center';
@@ -204,16 +240,16 @@
                 videoThumbnail.src = item.snippet.thumbnails.medium.url;
                 videoThumbnail.alt = item.snippet.title;
                 videoThumbnail.className = 'w-full h-48 rounded-lg shadow-lg cursor-pointer';
-                videoThumbnail.addEventListener('click', () => addToPlaylist(item.id.videoId));
+                videoThumbnail.addEventListener('click', () => addToPlaylist(item.id.videoId, item.snippet.title));
                 videoContainer.appendChild(videoThumbnail);
 
                 resultsDiv.appendChild(videoContainer);
             });
         }
 
-        function addToPlaylist(videoId) {
-            if (!playlist.includes(videoId)) {
-                playlist.push(videoId);
+        function addToPlaylist(videoId, title) {
+            if (!playlist.some(video => video.id === videoId)) {
+                playlist.push({ id: videoId, title: title });
                 updatePlaylist();
             }
         }
@@ -221,22 +257,55 @@
         function updatePlaylist() {
             const playlistUl = document.getElementById('playlist');
             playlistUl.innerHTML = '';
-            playlist.forEach((videoId, index) => {
+
+            playlist.forEach((video, index) => {
                 const li = document.createElement('li');
-                li.className = 'flex items-center justify-between p-2 bg-gray-100 rounded-lg shadow-md dark:bg-gray-700';
+                li.className = 'playlist-item';
+                li.draggable = true;
 
                 const span = document.createElement('span');
-                span.textContent = 'וידאו ' + (index + 1);
+                span.textContent = video.title;
+                span.className = 'flex-1';
+                span.addEventListener('click', () => {
+                    currentVideoIndex = index;
+                    loadVideo(video.id);
+                });
                 li.appendChild(span);
 
+                const dragHandle = document.createElement('i');
+                dragHandle.className = 'fas fa-grip-lines drag-handle';
+                li.appendChild(dragHandle);
+
                 const removeButton = document.createElement('button');
-                removeButton.textContent = '✖';
-                removeButton.className = 'text-red-500 hover:text-red-700 focus:outline-none';
+                removeButton.innerHTML = '✖';
+                removeButton.className = 'text-red-500 hover:text-red-700 focus:outline-none ml-2';
                 removeButton.addEventListener('click', () => {
                     playlist.splice(index, 1);
                     updatePlaylist();
                 });
                 li.appendChild(removeButton);
+
+                li.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', index);
+                    li.classList.add('dragging');
+                });
+
+                li.addEventListener('dragend', () => {
+                    li.classList.remove('dragging');
+                });
+
+                li.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+
+                li.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const draggedIndex = e.dataTransfer.getData('text/plain');
+                    const targetIndex = index;
+                    const draggedVideo = playlist.splice(draggedIndex, 1)[0];
+                    playlist.splice(targetIndex, 0, draggedVideo);
+                    updatePlaylist();
+                });
 
                 playlistUl.appendChild(li);
             });
@@ -245,7 +314,7 @@
         function playPlaylist() {
             if (playlist.length === 0) return;
             currentVideoIndex = 0;
-            loadVideo(playlist[currentVideoIndex]);
+            loadVideo(playlist[currentVideoIndex].id);
             document.getElementById('videoPlayerContainer').style.display = 'block';
         }
 
@@ -265,17 +334,31 @@
         }
 
         function playNext() {
-            if (currentVideoIndex < playlist.length - 1) {
+            if (shuffle) {
+                currentVideoIndex = Math.floor(Math.random() * playlist.length);
+            } else if (currentVideoIndex < playlist.length - 1) {
                 currentVideoIndex++;
-                loadVideo(playlist[currentVideoIndex]);
+            } else if (repeat) {
+                currentVideoIndex = 0;
+            } else {
+                return;
             }
+            loadVideo(playlist[currentVideoIndex].id);
         }
 
         function playPrevious() {
             if (currentVideoIndex > 0) {
                 currentVideoIndex--;
-                loadVideo(playlist[currentVideoIndex]);
+                loadVideo(playlist[currentVideoIndex].id);
             }
+        }
+
+        function toggleShuffle() {
+            shuffle = !shuffle;
+        }
+
+        function toggleRepeat() {
+            repeat = !repeat;
         }
 
         function togglePlaylist() {
@@ -325,6 +408,11 @@
                 playNext();
             }
         }
+
+        document.getElementById('volumeControl').addEventListener('input', function() {
+            const volume = document.getElementById('volumeControl').value;
+            player.setVolume(volume);
+        });
     </script>
 
 </body>
