@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>בודק קישורי יוטיוב לנטפרי</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        input, button {
+            font-size: 16px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>בודק קישורי יוטיוב לנטפרי</h1>
+    <input type="text" id="youtubeLink" placeholder="הכנס קישור ליוטיוב כאן">
+    <button onclick="checkLink()">בדוק קישור</button>
+    <div id="result"></div>
+
+    <script>
+        const statuses = {
+            success: { en: 'Success', he: 'הצלחה' },
+            failure: { en: 'Failed', he: 'נכשל' },
+            pending: { en: 'Pending...', he: 'ממתין...' }
+        };
+
+        async function checkLink() {
+            const link = document.getElementById('youtubeLink').value;
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = statuses.pending.he;
+
+            try {
+                const response = await fetch(`https://www.google.com/~netfree/test-url?u=${encodeURIComponent(link)}`);
+                const data = await response.json();
+
+                let resultText = '';
+                if (data.netfree === true) {
+                    resultText = 'הקישור פתוח בנטפרי';
+                } else if (data.block) {
+                    resultText = `הקישור חסום בנטפרי. סוג החסימה: ${data.block}`;
+                } else {
+                    resultText = 'לא ניתן לקבוע את סטטוס הקישור';
+                }
+
+                resultDiv.innerHTML = resultText;
+            } catch (error) {
+                resultDiv.innerHTML = 'אירעה שגיאה בבדיקת הקישור';
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
