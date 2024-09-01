@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>חיפוש ביוטיוב ויצירת פלייליסט</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        .dark-mode {
+            background-color: #1a202c;
+            color: #f7fafc;
+        }
+
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #4ade80;
+        }
+
+        .toggle-checkbox:checked + .toggle-label:before {
+            transform: translateX(24px);
+        }
+
+        .toggle-label {
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+            background-color: #ddd;
+            border-radius: 9999px;
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .toggle-label:before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background-color: #fff;
+            border-radius: 9999px;
+            transition: transform 0.3s;
+        }
+
+        .dark-mode .bg-white {
+            background-color: #2d3748;
+        }
+
+        .dark-mode .text-gray-800 {
+            color: #f7fafc;
+        }
+
+        .dark-mode input {
+            background-color: #4a5568;
+            color: #f7fafc;
+        }
+
+        .dark-mode input::placeholder {
+            color: #a0aec0;
+        }
+
+        #playlistSidebar.collapsed {
+            width: 0;
+            overflow: hidden;
+        }
+
+        #videoPlayerContainer {
+            display: none;
+        }
+
+        .playlist-item {
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+        }
+
+        .playlist-item:hover {
+            background-color: #e2e8f0;
+        }
+
+        .playlist-item.dragging {
+            background-color: #e2e8f0;
+            transform: scale(1.05);
+        }
+
+        .icon-button {
+            color: #2d3748;
+            font-size: 1.5rem;
+            transition: color 0.3s;
+        }
+
+        .icon-button:hover {
+            color: #4a5568;
+        }
+
+        .drag-handle {
+            cursor: move;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        #popupContainer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #popup {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.25);
+            text-align: center;
+        }
+
+        #popupMessage {
+            margin-bottom: 20px;
+        }
+
+        .popup-button {
+            background-color: #3182ce;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            margin: 0 10px;
+            cursor: pointer;
+        }
+
+        .popup-button:hover {
+            background-color: #2b6cb0;
+        }
+    </style>
+    <script src="https://www.youtube.com/iframe_api"></script>
+</head>
+
+<body class="bg-gray-100 text-gray-800 transition-colors duration-500">
+
+    <div id="popupContainer">
+        <div id="popup">
+            <div id="popupMessage"></div>
+            <div id="popupButtons">
+                <button class="popup-button" id="popupConfirm">אישור</button>
+                <button class="popup-button" id="popupCancel">ביטול</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex flex-col md:flex-row min-h-screen">
+        <!-- Sidebar for playlist -->
+        <div id="playlistSidebar" class="w-full md:w-1/4 bg-white dark:bg-gray-800 dark:text-white p-4 transition-all duration-300">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">פלייליסט שלי</h2>
+                <button onclick="togglePlaylist()" class="focus:outline-none">
+                    ☰
+                </button>
+            </div>
+
+            <!-- Playlist Selector -->
+            <div class="mb-4">
+                <select id="playlistSelector" class="w-full p-2 rounded-lg border border-gray-300">
+                    <!-- Playlist options will be added here -->
+                </select>
+                <div class="mt-2">
+                    <button onclick="createNewPlaylist()" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">צור פלייליסט חדש</button>
+                    <button onclick="renamePlaylist()" class="w-full mt-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">שנה שם פלייליסט</button>
+                    <button onclick="deletePlaylist()" class="w-full mt-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500">מחק פלייליסט</button>
+                </div>
+            </div>
+
+            <ul id="playlist" class="space-y-2">
+                <!-- Playlist items will be added here -->
+            </ul>
+            <div class="mt-6">
+                <button onclick="playPlaylist()" class="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 mb-2">
+                    נגן פלייליסט
+                </button>
+                <div id="videoPlayerContainer" class="mt-4">
+                    <div id="videoPlayer" class="w-full h-56 rounded-lg shadow-lg"></div>
+                </div>
+
+                <!-- Download and Upload buttons -->
+                <div class="mt-4">
+                    <button onclick="downloadCurrentPlaylist()" class="w-full mb-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">הורד פלייליסט נוכחי</button>
+                    <button onclick="downloadAllPlaylists()" class="w-full mb-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">הורד את כל הפלייליסטים</button>
+                    <button onclick="document.getElementById('fileInput').click()" class="w-full px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500">העלה פלייליסט</button>
+                    <input type="file" id="fileInput" accept=".json" onchange="uploadPlaylist()">
+                </div>
+
+                <div class="flex justify-between items-center mt-4">
+                    <i class="fas fa-backward icon-button" onclick="playPrevious()"></i>
+                    <i class="fas fa-play icon-button" onclick="togglePlayPause()"></i>
+                    <i class="fas fa-forward icon-button" onclick="playNext()"></i>
+                    <i class="fas fa-random icon-button" onclick="toggleShuffle()"></i>
+                    <i class="fas fa-redo icon-button" onclick="toggleRepeat()"></i>
+                    <input type="range" id="volumeControl" min="0" max="100" value="50" class="w-20 h-2 bg-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+        </div>
+
+        <!-- Main content -->
+        <div class="flex-1 p-8">
+            <div class="max-w-md mx-auto bg-white rounded-lg shadow-lg dark:bg-gray-800 dark:text-white p-6">
+                <h1 class="text-3xl font-bold mb-6 text-center">חיפוש ביוטיוב</h1>
+                <div class="flex mb-4">
+                    <input type="text" id="searchQuery" class="w-full p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="הזן טקסט לחיפוש ביוטיוב">
+                    <button onclick="searchYouTube()" class="bg-blue-500 text-white p-3 rounded-r-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">חפש</button>
+                </div>
+                <div class="flex items-center justify-center mb-4">
+                    <label for="toggleDarkMode" class="mr-2">מצב כהה</label>
+                    <input type="checkbox" id="toggleDarkMode" class="toggle-checkbox hidden">
+                    <label for="toggleDarkMode" class="toggle-label" onclick="toggleDarkMode()"></label>
+                </div>
+            </div>
+
+            <div id="results" class="w-full max-w-4xl mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+            <button id="loadMore" onclick="loadMoreResults()" class="mt-6 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500" style="display:none;">הצג עוד תוצאות</button>
+        </div>
+    </div>
+
+    <script>
+        let nextPageToken = '';
+        let query = '';
+        let playlists = {};
+        let currentPlaylistName = 'פלייליסט חדש';
+        let currentVideoIndex = 0;
+        let player;
+        let isPlaying = false;
+        let shuffle = false;
+        let repeat = false;
+        let userApiKey = '';
+
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('videoPlayer', {
+                events: {
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const existingApiKey = getCookie('userApiKey');
+            if (existingApiKey) {
+                userApiKey = existingApiKey;
+            } else {
+                showPopup('אנא הזן את מפתח ה-API שלך ל-YouTube:', (value) => {
+                    userApiKey = value;
+                    if (userApiKey) {
+                        setCookie('userApiKey', userApiKey, 365);
+                    }
+                }, true);
+            }
+            loadPlaylistsFromStorage();
+            populatePlaylistSelector();
+            loadCurrentPlaylist();
+            if (getCookie('darkMode') === 'enabled') {
+                toggleDarkMode();
+            }
+        });
+
+        document.getElementById('searchQuery').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchYouTube();
+            }
+        });
+
+        function searchYouTube() {
+            query = document.getElementById('searchQuery').value;
+            nextPageToken = '';
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('loadMore').style.display = 'none';
+            fetchResults();
+        }
+
+        function fetchResults() {
+            if (!userApiKey) {
+                showPopup('מפתח ה-API לא נמצא, אנא טען מחדש את הדף.');
+                return;
+            }
+
+            fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&key=${userApiKey}&pageToken=${nextPageToken}`)
+                .then(response => response.json())
+                .then(data => {
+                    nextPageToken = data.nextPageToken || '';
+                    document.getElementById('loadMore').style.display = nextPageToken ? 'block' : 'none';
+                    displayResults(data.items);
+                })
+                .catch(error => console.error('Error fetching YouTube data:', error));
+        }
+
+        function displayResults(items) {
+            const resultsDiv = document.getElementById('results');
+            items.forEach(item => {
+                const videoContainer = document.createElement('div');
+                videoContainer.className = 'bg-white dark:bg-gray-700 p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300';
+
+                const videoTitle = document.createElement('h2');
+                videoTitle.textContent = decodeHtmlEntities(item.snippet.title);
+                videoTitle.className = 'text-lg font-bold mt-2 text-center';
+                videoContainer.appendChild(videoTitle);
+
+                const videoThumbnail = document.createElement('img');
+                videoThumbnail.src = item.snippet.thumbnails.medium.url;
+                videoThumbnail.alt = item.snippet.title;
+                videoThumbnail.className = 'w-full h-48 rounded-lg shadow-lg cursor-pointer';
+                videoThumbnail.addEventListener('click', () => addToPlaylist(item.id.videoId, item.snippet.title));
+                videoContainer.appendChild(videoThumbnail);
+
+                resultsDiv.appendChild(videoContainer);
+            });
+        }
+
+        function addToPlaylist(videoId, title) {
+            if (!playlists[currentPlaylistName].some(video => video.id === videoId)) {
+                playlists[currentPlaylistName].push({ id: videoId, title: title });
+                updatePlaylist();
+                savePlaylistsToStorage();
+            }
+        }
+
+        function updatePlaylist() {
+            const playlistUl = document.getElementById('playlist');
+            playlistUl.innerHTML = '';
+
+            playlists[currentPlaylistName].forEach((video, index) => {
+                const li = document.createElement('li');
+                li.className = 'playlist-item';
+                li.draggable = true;
+
+                const span = document.createElement('span');
+                span.textContent = video.title;
+                span.className = 'flex-1';
+                span.addEventListener('click', () => {
+                    currentVideoIndex = index;
+                    loadVideo(video.id);
+                });
+                li.appendChild(span);
+
+                const dragHandle = document.createElement('i');
+                dragHandle.className = 'fas fa-grip-lines drag-handle';
+                li.appendChild(dragHandle);
+
+                const removeButton = document.createElement('button');
+                removeButton.innerHTML = '✖';
+                removeButton.className = 'text-red-500 hover:text-red-700 focus:outline-none ml-2';
+                removeButton.addEventListener('click', () => {
+                    playlists[currentPlaylistName].splice(index, 1);
+                    updatePlaylist();
+                    savePlaylistsToStorage();
+                });
+                li.appendChild(removeButton);
+
+                li.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', index);
+                    li.classList.add('dragging');
+                });
+
+                li.addEventListener('dragend', () => {
+                    li.classList.remove('dragging');
+                });
+
+                li.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+
+                li.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const draggedIndex = e.dataTransfer.getData('text/plain');
+                    const targetIndex = index;
+                    const draggedVideo = playlists[currentPlaylistName].splice(draggedIndex, 1)[0];
+                    playlists[currentPlaylistName].splice(targetIndex, 0, draggedVideo);
+                    updatePlaylist();
+                    savePlaylistsToStorage();
+                });
+
+                playlistUl.appendChild(li);
+            });
+        }
+
+        function createNewPlaylist() {
+            showPopup('הכנס שם לפלייליסט החדש:', (newPlaylistName) => {
+                if (newPlaylistName && !playlists[newPlaylistName]) {
+                    playlists[newPlaylistName] = [];
+                    populatePlaylistSelector();
+                    document.getElementById('playlistSelector').value = newPlaylistName;
+                    switchPlaylist(newPlaylistName);
+                }
+            }, true);
+        }
+
+        function renamePlaylist() {
+            showPopup('הכנס שם חדש לפלייליסט:', (newName) => {
+                if (newName && !playlists[newName]) {
+                    playlists[newName] = playlists[currentPlaylistName];
+                    delete playlists[currentPlaylistName];
+                    populatePlaylistSelector();
+                    document.getElementById('playlistSelector').value = newName;
+                    switchPlaylist(newName);
+                }
+            }, true);
+        }
+
+        function deletePlaylist() {
+            showPopup(`האם למחוק את הפלייליסט "${currentPlaylistName}"?`, (confirm) => {
+                if (confirm) {
+                    delete playlists[currentPlaylistName];
+                    populatePlaylistSelector();
+                    if (Object.keys(playlists).length > 0) {
+                        switchPlaylist(Object.keys(playlists)[0]);
+                    } else {
+                        currentPlaylistName = 'פלייליסט חדש';
+                        playlists[currentPlaylistName] = [];
+                        populatePlaylistSelector();
+                        updatePlaylist();
+                    }
+                }
+            });
+        }
+
+        function populatePlaylistSelector() {
+            const selector = document.getElementById('playlistSelector');
+            selector.innerHTML = '';
+            for (const playlistName in playlists) {
+                const option = document.createElement('option');
+                option.value = playlistName;
+                option.textContent = playlistName;
+                selector.appendChild(option);
+            }
+            selector.value = currentPlaylistName;
+        }
+
+        function switchPlaylist(playlistName) {
+            currentPlaylistName = playlistName;
+            loadCurrentPlaylist();
+        }
+
+        document.getElementById('playlistSelector').addEventListener('change', (e) => {
+            switchPlaylist(e.target.value);
+        });
+
+        function loadCurrentPlaylist() {
+            if (!playlists[currentPlaylistName]) {
+                playlists[currentPlaylistName] = [];
+            }
+            updatePlaylist();
+        }
+
+        function playPlaylist() {
+            if (playlists[currentPlaylistName].length === 0) return;
+            currentVideoIndex = 0;
+            loadVideo(playlists[currentPlaylistName][currentVideoIndex].id);
+            document.getElementById('videoPlayerContainer').style.display = 'block';
+        }
+
+        function loadVideo(videoId) {
+            player.loadVideoById(videoId);
+            isPlaying = true;
+        }
+
+        function togglePlayPause() {
+            if (!isPlaying) {
+                player.playVideo();
+                isPlaying = true;
+            } else {
+                player.pauseVideo();
+                isPlaying = false;
+            }
+        }
+
+        function playNext() {
+            if (shuffle) {
+                currentVideoIndex = Math.floor(Math.random() * playlists[currentPlaylistName].length);
+            } else if (currentVideoIndex < playlists[currentPlaylistName].length - 1) {
+                currentVideoIndex++;
+            } else if (repeat) {
+                currentVideoIndex = 0;
+            } else {
+                return;
+            }
+            loadVideo(playlists[currentPlaylistName][currentVideoIndex].id);
+        }
+
+        function playPrevious() {
+            if (currentVideoIndex > 0) {
+                currentVideoIndex--;
+                loadVideo(playlists[currentPlaylistName][currentVideoIndex].id);
+            }
+        }
+
+        function toggleShuffle() {
+            shuffle = !shuffle;
+            showPopup(`Shuffle ${shuffle ? 'enabled' : 'disabled'}`);
+        }
+
+        function toggleRepeat() {
+            repeat = !repeat;
+            showPopup(`Repeat ${repeat ? 'enabled' : 'disabled'}`);
+        }
+
+        function togglePlaylist() {
+            const sidebar = document.getElementById('playlistSidebar');
+            sidebar.classList.toggle('collapsed');
+        }
+
+        function loadMoreResults() {
+            fetchResults();
+        }
+
+        function decodeHtmlEntities(text) {
+            const txt = document.createElement('textarea');
+            txt.innerHTML = text;
+            return txt.value;
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            setCookie('darkMode', document.body.classList.contains('dark-mode') ? 'enabled' : 'disabled', 365);
+        }
+
+        function setCookie(name, value, days) {
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            const expires = "expires=" + date.toUTCString();
+            document.cookie = name + "=" + value + ";" + expires + ";path=/";
+        }
+
+        function getCookie(name) {
+            const decodedCookie = decodeURIComponent(document.cookie);
+            const ca = decodedCookie.split(';');
+            name = name + "=";
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) === ' ') {
+                    c = c.substring(1);
+                }
+                if (c.indexOf(name) === 0) {
+                    return c.substring(name.length, c.length);
+                }
+            }
+            return "";
+        }
+
+        function savePlaylistsToStorage() {
+            localStorage.setItem('playlists', JSON.stringify(playlists));
+        }
+
+        function loadPlaylistsFromStorage() {
+            const storedPlaylists = localStorage.getItem('playlists');
+            if (storedPlaylists) {
+                playlists = JSON.parse(storedPlaylists);
+            } else {
+                playlists[currentPlaylistName] = [];
+            }
+        }
+
+        function downloadCurrentPlaylist() {
+            downloadPlaylist(currentPlaylistName);
+        }
+
+        function downloadAllPlaylists() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(playlists));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "all_playlists.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function downloadPlaylist(playlistName) {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(playlists[playlistName]));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", playlistName + ".json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function uploadPlaylist() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const uploadedPlaylist = JSON.parse(e.target.result);
+                    showPopup('הכנס שם לפלייליסט שהועלה:', (playlistName) => {
+                        if (playlistName && !playlists[playlistName]) {
+                            playlists[playlistName] = uploadedPlaylist;
+                            populatePlaylistSelector();
+                            document.getElementById('playlistSelector').value = playlistName;
+                            switchPlaylist(playlistName);
+                            savePlaylistsToStorage();
+                        }
+                    }, true, file.name.replace('.json', ''));
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.ENDED) {
+                playNext();
+            }
+        }
+
+        document.getElementById('volumeControl').addEventListener('input', function() {
+            const volume = document.getElementById('volumeControl').value;
+            player.setVolume(volume);
+        });
+
+        function showPopup(message, callback, isPrompt = false, defaultValue = '') {
+            const popupContainer = document.getElementById('popupContainer');
+            const popupMessage = document.getElementById('popupMessage');
+            const popupConfirm = document.getElementById('popupConfirm');
+            const popupCancel = document.getElementById('popupCancel');
+            popupMessage.innerHTML = message;
+            popupContainer.style.display = 'flex';
+            popupConfirm.onclick = function() {
+                popupContainer.style.display = 'none';
+                if (callback) {
+                    callback(isPrompt ? document.getElementById('popupInput').value : true);
+                }
+            };
+            popupCancel.onclick = function() {
+                popupContainer.style.display = 'none';
+                if (callback) callback(false);
+            };
+            if (isPrompt) {
+                popupMessage.innerHTML = `<input id="popupInput" class="border p-2 rounded" value="${defaultValue}" />`;
+            }
+        }
+    </script>
+
+</body>
+
+</html>
