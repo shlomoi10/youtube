@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>חיפוש ביוטיוב ויצירת פלייליסט</title>
+    <title>חיפושללמלמ ביוטיוב ויצירת פלייליסט</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <style>
@@ -60,10 +60,10 @@
 .dark-mode input::placeholder {
     color: #a0aec0;
 }
-
 #playlistSidebar.collapsed {
     width: 60px;
     overflow: hidden;
+    padding: 0; /* Ensure no padding is left */
 }
 
 #playlistSidebar.collapsed .playlist-item,
@@ -81,7 +81,10 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    margin-top: 20%;
+    height: 100vh; /* Adjust height to center the music controls vertically */
+    margin-top: 0; /* Reset margin-top for full vertical centering */
+}
+
 }
 
 #videoPlayerContainer {
